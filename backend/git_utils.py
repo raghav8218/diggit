@@ -163,7 +163,7 @@ def fetch_github_in_memory(raw_url: str, requested_branch: Optional[str] = None)
         raise ValueError(f"Could not parse GitHub owner/repo from {raw_url}")
 
     active_branch = requested_branch.strip() if requested_branch and requested_branch.strip() else "main"
-    headers = {"User-Agent": "Code-Archaeologist"}
+    headers = {"User-Agent": "DigGit"}
     gh_token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if gh_token:
         headers["Authorization"] = f"token {gh_token}"

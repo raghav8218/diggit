@@ -939,6 +939,13 @@ input, textarea {
   color: var(--text-primary);
 }
 
+.module-select-dropdown option {
+  color: #000000 !important;
+  background-color: #ffffff !important;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
 .graph-filter-chip {
   display: flex;
   align-items: center;

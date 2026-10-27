@@ -37,7 +37,7 @@ from database import (
     safe_delete_tree,
 )
 
-app = FastAPI(title="Code Archaeologist API")
+app = FastAPI(title="DigGit API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -256,7 +256,7 @@ def process_repo_analysis(raw_url: str, requested_branch: Optional[str] = None, 
 
     # Fallback to shallow clone depth=15 if in-memory streaming failed or non-GitHub URL
     if not extracted:
-        workdir_obj = Path(tempfile.gettempdir()) / "code-archaeologist" / repo_id
+        workdir_obj = Path(tempfile.gettempdir()) / "diggit" / repo_id
         workdir_obj.mkdir(parents=True, exist_ok=True)
         CLONE_DEPTH = 15
         clone_opts = ["--single-branch", "--no-tags"]
@@ -708,3 +708,28 @@ def ask_stream(repo_id: str, req: AskRequest):
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Serve compiled frontend in production if dist exists
+frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if not frontend_dist.exists():
+    frontend_dist = Path(__file__).resolve().parent / "static"
+
+if frontend_dist.exists():
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    assets_dir = frontend_dist / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_frontend(full_path: str):
+        # Pass through any unmatched API routes
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        target_file = frontend_dist / full_path
+        if target_file.exists() and target_file.is_file():
+            return FileResponse(target_file)
+        return FileResponse(frontend_dist / "index.html")
+

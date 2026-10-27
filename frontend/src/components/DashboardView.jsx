@@ -36,7 +36,7 @@ export default function DashboardView({
   // Load recents from localStorage
   useEffect(() => {
     try {
-      const stored = localStorage.getItem('code_archaeologist_recents')
+      const stored = localStorage.getItem('diggit_recents') || localStorage.getItem('code_archaeologist_recents')
       if (stored) {
         setRecents(JSON.parse(stored))
       }
@@ -78,11 +78,12 @@ export default function DashboardView({
     e.stopPropagation()
     const updated = recents.filter((r) => r.repo_id !== repoId)
     setRecents(updated)
-    localStorage.setItem('code_archaeologist_recents', JSON.stringify(updated))
+    localStorage.setItem('diggit_recents', JSON.stringify(updated))
   }
 
   const handleClearRecents = () => {
     setRecents([])
+    localStorage.removeItem('diggit_recents')
     localStorage.removeItem('code_archaeologist_recents')
   }
 
@@ -95,15 +96,15 @@ export default function DashboardView({
       <div className="dashboard-hero">
         <div className="hero-pill-badge">
           <Sparkles size={13} className="hero-sparkle-icon" />
-          <span>AST SYMBOL VISUALIZATION & GIT ARCHEOLOGY</span>
+          <span>DIG INTO GIT REPOSITORIES • CODE INTELLIGENCE</span>
         </div>
 
         <h1 className="hero-title">
-          Code <span className="hero-gradient-text">Archaeologist</span>
+          Dig<span className="hero-gradient-text">Git</span>
         </h1>
         <p className="hero-subtitle">
-          Excavate unfamiliar Python repositories with interactive circular dependency graphs,
-          file clustering, and commit-history grounded architectural context.
+          Dig into git repositories with interactive architectural graphs,
+          semantic code clustering, and commit-history grounded AI context.
         </p>
 
         {/* Command Search Box */}

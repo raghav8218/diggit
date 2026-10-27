@@ -1,5 +1,5 @@
 """
-Two-stage retrieval pipeline for Code Archaeologist.
+Two-stage retrieval pipeline for DigGit.
 
 Stage 0  — Build a compact repository structural index during analysis.
 Stage 1  — Use an LLM to identify relevant components from the index.

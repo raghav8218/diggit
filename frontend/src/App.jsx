@@ -33,7 +33,7 @@ export default function App() {
   useEffect(() => {
     if (!repoData) {
       try {
-        const storedCurrent = localStorage.getItem('code_archaeologist_active_repo')
+        const storedCurrent = localStorage.getItem('diggit_active_repo') || localStorage.getItem('code_archaeologist_active_repo')
         if (storedCurrent) {
           const parsed = JSON.parse(storedCurrent)
           setRepoData(parsed)
@@ -132,10 +132,10 @@ export default function App() {
 
       // Store in localStorage safely
       try {
-        localStorage.setItem('code_archaeologist_active_repo', JSON.stringify(finalData))
+        localStorage.setItem('diggit_active_repo', JSON.stringify(finalData))
 
         // Update recents list
-        const recentsRaw = localStorage.getItem('code_archaeologist_recents')
+        const recentsRaw = localStorage.getItem('diggit_recents') || localStorage.getItem('code_archaeologist_recents')
         const recents = recentsRaw ? JSON.parse(recentsRaw) : []
         const newEntry = {
           repo_id: finalData.repo_id,
@@ -149,7 +149,7 @@ export default function App() {
         }
         const filtered = recents.filter((r) => r.repo_name !== finalData.repo_name)
         const updatedRecents = [newEntry, ...filtered].slice(0, 8)
-        localStorage.setItem('code_archaeologist_recents', JSON.stringify(updatedRecents))
+        localStorage.setItem('diggit_recents', JSON.stringify(updatedRecents))
       } catch (e) {
         console.warn('LocalStorage save failed:', e)
       }

@@ -7,7 +7,13 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 DB_DIR = Path(__file__).resolve().parent / "data"
-DB_PATH = DB_DIR / "archaeologist.db"
+DB_PATH = DB_DIR / "diggit.db"
+# Seamlessly migrate from legacy archaeologist.db if present
+if not DB_PATH.exists() and (DB_DIR / "archaeologist.db").exists():
+    try:
+        shutil.copy(DB_DIR / "archaeologist.db", DB_PATH)
+    except Exception:
+        pass
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -453,7 +459,7 @@ def safe_delete_tree(path: Path | str):
 
 def cleanup_all_temp_clones():
     """Wipes legacy orphaned cloned folders in the OS temp directory to reclaim disk space."""
-    temp_base = Path(tempfile.gettempdir()) / "code-archaeologist"
+    temp_base = Path(tempfile.gettempdir()) / "diggit"
     if temp_base.exists():
         for item in temp_base.iterdir():
             if item.is_dir():
