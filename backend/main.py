@@ -457,7 +457,15 @@ def analyze_stream(req: AnalyzeRequest):
         elif "res" in result_holder:
             yield json.dumps({"type": "complete", "result": result_holder["res"]}) + "\n"
 
-    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        event_stream(),
+        media_type="application/x-ndjson",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 def _get_repo(repo_id: str):
@@ -688,7 +696,15 @@ def ask_stream(repo_id: str, req: AskRequest):
         except Exception as e:
             yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
 
-    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+    return StreamingResponse(
+        event_generator(),
+        media_type="application/x-ndjson",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/api/repositories")
