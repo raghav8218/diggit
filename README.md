@@ -10,7 +10,7 @@
 ## 📌 Project Links & Deliverables
 
 - **Public Code Repository**: [https://github.com/raghav8218/diggit](https://github.com/raghav8218/diggit)
-- **Live Deployment**: [https://diggit-beta.vercel.app](https://diggit-raghav8218s-projects.vercel.app)
+- **Live Deployment**: [https://diggit-beta.vercel.app/](https://diggit-beta.vercel.app/)
 - **Project Documentation & Presentation Deck**: [View Project Deck (Google Drive / PDF)](https://drive.google.com/drive/folders/diggit-project-deck) <!-- Replace with your public Google Drive / Canva link -->
 - **Product Demonstration Video**: [Watch Demo Video (YouTube / Drive)](https://youtu.be/diggit-product-demo) <!-- Replace with your public video link -->
 
