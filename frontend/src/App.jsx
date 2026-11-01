@@ -69,12 +69,21 @@ export default function App() {
       logs: ['Initiating archaeological analysis probe...'],
     })
 
+    let coldStartTimer = setTimeout(() => {
+      setProgress((prev) => ({
+        ...prev,
+        message: 'Connecting to Cloud Engine (waking up container if idle)...',
+        logs: [...prev.logs, 'Waking up Render backend container (spins down on free tier when idle)...'],
+      }))
+    }, 3500)
+
     try {
       const res = await fetch(`${API_BASE}/api/analyze/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repoUrl, branch: branch || null }),
       })
+      clearTimeout(coldStartTimer)
 
       if (!res.ok) {
         let errDetail = 'Analysis request failed.'
@@ -163,6 +172,7 @@ export default function App() {
     } catch (err) {
       setError(err.message)
     } finally {
+      clearTimeout(coldStartTimer)
       setLoading(false)
       setProgress((prev) => ({ ...prev, active: false }))
     }

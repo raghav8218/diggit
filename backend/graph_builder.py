@@ -207,7 +207,7 @@ def build_graph(extracted: Dict[str, Any]) -> Tuple[nx.DiGraph, List[Dict[str, A
     keystones = []
     if G.number_of_nodes() > 0:
         try:
-            pagerank_scores = nx.pagerank(G, alpha=0.85, max_iter=100)
+            pagerank_scores = nx.pagerank(G, alpha=0.85, max_iter=40, tol=1e-4)
         except Exception:
             # Fallback to in-degree centrality
             pagerank_scores = nx.in_degree_centrality(G)
