@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { API_BASE } from '../apiConfig.js'
 
 export default function CodePanel({ repoId, selected, onTrace }) {
   const [details, setDetails] = useState(null)
@@ -8,7 +9,7 @@ export default function CodePanel({ repoId, selected, onTrace }) {
     if (!selected) return
     setLoading(true)
     setDetails(null)
-    fetch(`/api/function/${repoId}?id=${encodeURIComponent(selected.id)}`)
+    fetch(`${API_BASE}/api/function/${repoId}?id=${encodeURIComponent(selected.id)}`)
       .then((r) => r.json())
       .then(setDetails)
       .finally(() => setLoading(false))

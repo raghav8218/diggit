@@ -30,6 +30,8 @@ from database import (
     find_cached_repo,
     save_repository_analysis,
     get_repository_analysis,
+    get_all_repositories,
+    delete_repository,
     get_all_symbols,
     get_symbol_details as db_get_symbol_details,
     save_qa_thread,
@@ -181,7 +183,6 @@ def _reconstruct_networkx(graph_data: Dict[str, Any]) -> nx.DiGraph:
     return G
 
 
-@app.post("/api/analyze")
 def process_repo_analysis(raw_url: str, requested_branch: Optional[str] = None, progress_cb=None) -> Dict[str, Any]:
     raw_url = raw_url.strip()
     if not raw_url:
@@ -205,23 +206,8 @@ def process_repo_analysis(raw_url: str, requested_branch: Optional[str] = None, 
             progress_cb(4, "graph", "Restoring cached dependency graph & metrics...", 80)
             progress_cb(7, "complete", "Excavation loaded from database!", 100)
 
-        # Restore in memory for active session
-        G = _reconstruct_networkx(cached["graph"])
-        STORE[cached_id] = {
-            "workdir": "",
-            "graph": G,
-            "symbols_by_id": {},  # Will load on demand from SQLite
-            "functions_by_id": {},
-            "classes_by_id": {},
-            "files": [],
-            "file_change_freq": {},
-            "repo_index": {"files": [], "classes": [], "functions": [], "constants": [], "imports": [], "routes": []},
-            "commits": cached.get("commits", []),
-            "architectural_context": cached.get("architectural_context", ""),
-            "repo_url": cached.get("repo_url", raw_url),
-            "repo_name": cached.get("repo_name", repo_name),
-            "branch": cached.get("branch", "main"),
-        }
+        # Warm up session memory from database
+        _get_repo(cached_id)
         return cached
 
     # ── 2. Cloud-Native Zero-Disk Ingestion (In-Memory Tarball Stream) ──
@@ -703,6 +689,34 @@ def ask_stream(repo_id: str, req: AskRequest):
             yield json.dumps({"type": "error", "detail": str(e)}) + "\n"
 
     return StreamingResponse(event_generator(), media_type="application/x-ndjson")
+
+
+@app.get("/api/repositories")
+def list_repositories():
+    """List all previously excavated repositories stored in SQLite."""
+    repos = get_all_repositories()
+    return {"repositories": repos}
+
+
+@app.get("/api/repo/{repo_id}")
+def get_repo_data(repo_id: str):
+    """Retrieve full repository analysis data by repo_id from SQLite."""
+    # Ensure memory store is warmed up
+    _get_repo(repo_id)
+    data = get_repository_analysis(repo_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Repository not found.")
+    return data
+
+
+@app.delete("/api/repo/{repo_id}")
+def remove_repository(repo_id: str):
+    """Delete a repository from SQLite database and memory store."""
+    STORE.pop(repo_id, None)
+    success = delete_repository(repo_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to delete repository.")
+    return {"status": "ok", "deleted": repo_id}
 
 
 @app.get("/api/health")

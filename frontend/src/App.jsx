@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import DashboardView from './components/DashboardView.jsx'
 import WorkspaceView from './components/WorkspaceView.jsx'
+import { API_BASE } from './apiConfig.js'
 
 export default function App() {
   const [currentRoute, setCurrentRoute] = useState(
@@ -69,7 +70,7 @@ export default function App() {
     })
 
     try {
-      const res = await fetch('/api/analyze/stream', {
+      const res = await fetch(`${API_BASE}/api/analyze/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ repo_url: repoUrl, branch: branch || null }),
@@ -134,21 +135,24 @@ export default function App() {
       try {
         localStorage.setItem('diggit_active_repo', JSON.stringify(finalData))
 
-        // Update recents list
+        // Update recents list (metadata only to prevent localStorage quota exhaustion)
         const recentsRaw = localStorage.getItem('diggit_recents') || localStorage.getItem('code_archaeologist_recents')
         const recents = recentsRaw ? JSON.parse(recentsRaw) : []
         const newEntry = {
           repo_id: finalData.repo_id,
+          id: finalData.repo_id,
           repo_name: finalData.repo_name,
           repo_url: finalData.repo_url,
           branch: finalData.branch,
           num_files: finalData.num_files,
           num_functions: finalData.num_functions,
+          num_classes: finalData.num_classes,
           timestamp: new Date().toISOString(),
-          cachedData: finalData,
         }
-        const filtered = recents.filter((r) => r.repo_name !== finalData.repo_name)
-        const updatedRecents = [newEntry, ...filtered].slice(0, 8)
+        const filtered = recents.filter(
+          (r) => (r.repo_id || r.id) !== finalData.repo_id && r.repo_name !== finalData.repo_name
+        )
+        const updatedRecents = [newEntry, ...filtered].slice(0, 10)
         localStorage.setItem('diggit_recents', JSON.stringify(updatedRecents))
       } catch (e) {
         console.warn('LocalStorage save failed:', e)
@@ -164,15 +168,58 @@ export default function App() {
     }
   }
 
-  // Open cached repo from recents
-  const handleOpenCached = (recentItem) => {
-    if (recentItem.cachedData) {
+  // Open cached repo from recents / SQLite
+  const handleOpenCached = async (recentItem) => {
+    setError('')
+    const repoId = recentItem.repo_id || recentItem.id
+
+    // If full data is already embedded
+    if (recentItem.cachedData && recentItem.cachedData.graph) {
       setRepoData(recentItem.cachedData)
-      localStorage.setItem('code_archaeologist_active_repo', JSON.stringify(recentItem.cachedData))
+      try {
+        localStorage.setItem('diggit_active_repo', JSON.stringify(recentItem.cachedData))
+      } catch (e) {
+        console.warn('LocalStorage save failed:', e)
+      }
       navigateTo('/workspace')
-    } else {
-      handleAnalyze(recentItem.repo_url || recentItem.repo_name, recentItem.branch || 'main')
+      return
     }
+
+    // Fast-load directly from backend SQLite via repo_id
+    if (repoId) {
+      setLoading(true)
+      setProgress({
+        active: true,
+        step: 4,
+        stage: 'graph',
+        message: `Restoring ${recentItem.repo_name || 'repository'} from database...`,
+        percent: 60,
+        logs: [`Fetching cached excavation ${repoId} from SQLite database...`],
+      })
+
+      try {
+        const res = await fetch(`${API_BASE}/api/repo/${repoId}`)
+        if (res.ok) {
+          const data = await res.json()
+          setRepoData(data)
+          try {
+            localStorage.setItem('diggit_active_repo', JSON.stringify(data))
+          } catch (e) {
+            console.warn('LocalStorage save failed:', e)
+          }
+          navigateTo('/workspace')
+          return
+        }
+      } catch (e) {
+        console.warn('Fast repo load failed, falling back to analyze:', e)
+      } finally {
+        setLoading(false)
+        setProgress((prev) => ({ ...prev, active: false }))
+      }
+    }
+
+    // Fallback: analyze repo without forcing branch to 'main'
+    handleAnalyze(recentItem.repo_url || recentItem.repo_name, recentItem.branch || '')
   }
 
   // Downstream BFS tracing
@@ -180,7 +227,7 @@ export default function App() {
     if (!repoData?.repo_id || !startId) return
     try {
       const res = await fetch(
-        `/api/trace/${repoData.repo_id}?start_id=${encodeURIComponent(startId)}`
+        `${API_BASE}/api/trace/${repoData.repo_id}?start_id=${encodeURIComponent(startId)}`
       )
       if (!res.ok) throw new Error('Trace failed')
       const data = await res.json()

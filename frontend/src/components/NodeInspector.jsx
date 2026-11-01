@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react'
+import { API_BASE } from '../apiConfig.js'
 import {
   Code,
   GitCommit,
@@ -42,7 +43,7 @@ export default function NodeInspector({
     setLoading(true)
     const symbolId = selected.id || selected.raw_id
 
-    fetch(`/api/symbol/${repoId}?id=${encodeURIComponent(symbolId)}`)
+    fetch(`${API_BASE}/api/symbol/${repoId}?id=${encodeURIComponent(symbolId)}`)
       .then((res) => {
         if (!res.ok) throw new Error('Symbol details not found')
         return res.json()

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { API_BASE } from '../apiConfig.js'
 import {
   FileText,
   Copy,
@@ -31,7 +32,7 @@ export default function ArchitecturalContextView({
   // Load persistent Q&A conversation history from SQLite database
   useEffect(() => {
     if (!repoId) return
-    fetch(`/api/qa/${repoId}`)
+    fetch(`${API_BASE}/api/qa/${repoId}`)
       .then((res) => {
         if (!res.ok) throw new Error('Could not fetch Q&A history')
         return res.json()
@@ -82,7 +83,7 @@ export default function ArchitecturalContextView({
     setThreads((prev) => [...prev, newThreadItem])
 
     try {
-      const res = await fetch(`/api/ask/stream/${repoId}`, {
+      const res = await fetch(`${API_BASE}/api/ask/stream/${repoId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: currentQuestion }),

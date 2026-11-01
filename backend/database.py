@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -100,6 +101,36 @@ def init_db():
         conn.close()
 
 
+def get_url_variations(raw_input: str) -> List[str]:
+    """Generate all variations of a repo identifier (owner/repo, https, .git, etc.)."""
+    s = raw_input.strip().rstrip("/")
+    variations = {s}
+
+    clean = s
+    for prefix in ("https://github.com/", "http://github.com/", "git@github.com:"):
+        if clean.startswith(prefix):
+            clean = clean[len(prefix):]
+            break
+    clean = clean.replace(".git", "").strip("/")
+
+    if "/" in clean:
+        parts = clean.split("/")
+        if len(parts) == 2:
+            owner, repo = parts[0], parts[1]
+            variations.add(f"{owner}/{repo}")
+            variations.add(f"https://github.com/{owner}/{repo}")
+            variations.add(f"https://github.com/{owner}/{repo}.git")
+            variations.add(f"http://github.com/{owner}/{repo}")
+            variations.add(f"http://github.com/{owner}/{repo}.git")
+
+    if s.endswith(".git"):
+        variations.add(s[:-4])
+    else:
+        variations.add(f"{s}.git")
+
+    return list(variations)
+
+
 def normalize_repo_url(url: str) -> str:
     url = url.strip()
     if not url.startswith("http://") and not url.startswith("https://") and not url.startswith("git@"):
@@ -112,46 +143,39 @@ def normalize_repo_url(url: str) -> str:
 
 
 def find_cached_repo(repo_url: str, branch: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    norm_url = normalize_repo_url(repo_url)
     conn = get_db_connection()
     try:
-        if branch and branch.strip():
-            row = conn.execute(
-                "SELECT * FROM repositories WHERE (repo_url = ? OR repo_url = ?) AND branch = ? ORDER BY created_at DESC LIMIT 1",
-                (norm_url, repo_url.strip(), branch.strip()),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT * FROM repositories WHERE repo_url = ? OR repo_url = ? ORDER BY created_at DESC LIMIT 1",
-                (norm_url, repo_url.strip()),
-            ).fetchone()
+        variations = get_url_variations(repo_url)
+        placeholders = ",".join(["?"] * len(variations))
+        clean_branch = branch.strip() if branch and branch.strip() else None
+
+        row = None
+        # 1. If branch was specified, attempt exact branch match first
+        if clean_branch:
+            sql = f"""
+                SELECT id FROM repositories
+                WHERE (repo_url IN ({placeholders}) OR repo_name IN ({placeholders}) OR id = ?)
+                  AND branch = ?
+                ORDER BY created_at DESC LIMIT 1
+            """
+            params = list(variations) + list(variations) + [repo_url.strip(), clean_branch]
+            row = conn.execute(sql, params).fetchone()
+
+        # 2. Fall back to matching repo identifier regardless of branch
+        # (e.g. if requested branch is 'main' but repo was cached under 'master' or vice versa)
+        if not row:
+            sql = f"""
+                SELECT id FROM repositories
+                WHERE repo_url IN ({placeholders}) OR repo_name IN ({placeholders}) OR id = ?
+                ORDER BY created_at DESC LIMIT 1
+            """
+            params = list(variations) + list(variations) + [repo_url.strip()]
+            row = conn.execute(sql, params).fetchone()
 
         if not row:
             return None
 
-        repo_id = row["id"]
-        graph_row = conn.execute("SELECT * FROM graph_cache WHERE repo_id = ?", (repo_id,)).fetchone()
-        if not graph_row:
-            return None
-
-        nodes = json.loads(graph_row["nodes_json"])
-        edges = json.loads(graph_row["edges_json"])
-        commits = json.loads(row["commits_json"])
-
-        return {
-            "repo_id": row["id"],
-            "repo_url": row["repo_url"],
-            "repo_name": row["repo_name"],
-            "branch": row["branch"],
-            "graph": {"nodes": nodes, "edges": edges},
-            "num_files": row["num_files"],
-            "num_functions": row["num_functions"],
-            "num_classes": row["num_classes"],
-            "unresolved_calls": row["unresolved_calls"],
-            "commits": commits,
-            "architectural_context": row["architectural_context"],
-            "is_cached": True,
-        }
+        return get_repository_analysis(row["id"])
     finally:
         conn.close()
 
@@ -290,6 +314,35 @@ def get_repository_analysis(repo_id: str) -> Optional[Dict[str, Any]]:
         nodes = json.loads(graph_row["nodes_json"]) if graph_row else []
         edges = json.loads(graph_row["edges_json"]) if graph_row else []
 
+        # Extract keystones from nodes
+        keystones = [
+            {"id": n["id"], "score": n.get("pagerank", 0), "label": n.get("label", n["id"])}
+            for n in nodes if n.get("is_keystone")
+        ]
+        if not keystones and nodes:
+            sorted_nodes = sorted(nodes, key=lambda n: n.get("pagerank", 0), reverse=True)
+            keystones = [
+                {"id": n["id"], "score": n.get("pagerank", 0), "label": n.get("label", n["id"])}
+                for n in sorted_nodes[:5]
+            ]
+
+        # Extract circular dependencies from nodes if marked
+        circular_nodes = [n.get("label", n["id"]) for n in nodes if n.get("has_circular_dependency")]
+
+        commits = []
+        if row["commits_json"]:
+            try:
+                commits = json.loads(row["commits_json"])
+            except Exception:
+                commits = []
+
+        file_change_freq = {}
+        if row["file_change_freq_json"]:
+            try:
+                file_change_freq = json.loads(row["file_change_freq_json"])
+            except Exception:
+                file_change_freq = {}
+
         return {
             "repo_id": row["id"],
             "repo_url": row["repo_url"],
@@ -300,10 +353,58 @@ def get_repository_analysis(repo_id: str) -> Optional[Dict[str, Any]]:
             "num_functions": row["num_functions"],
             "num_classes": row["num_classes"],
             "unresolved_calls": row["unresolved_calls"],
-            "commits": json.loads(row["commits_json"]),
-            "file_change_freq": json.loads(row["file_change_freq_json"]),
-            "architectural_context": row["architectural_context"],
+            "commits": commits,
+            "file_change_freq": file_change_freq,
+            "architectural_context": row["architectural_context"] or "",
+            "keystones": keystones,
+            "circular_dependencies": [circular_nodes] if circular_nodes else [],
+            "is_cached": True,
         }
+    finally:
+        conn.close()
+
+
+def get_all_repositories() -> List[Dict[str, Any]]:
+    conn = get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, repo_name, repo_url, branch, num_files, num_functions, num_classes, unresolved_calls, created_at
+            FROM repositories
+            ORDER BY created_at DESC
+            """
+        ).fetchall()
+        return [
+            {
+                "repo_id": r["id"],
+                "id": r["id"],
+                "repo_name": r["repo_name"],
+                "repo_url": r["repo_url"],
+                "branch": r["branch"],
+                "num_files": r["num_files"],
+                "num_functions": r["num_functions"],
+                "num_classes": r["num_classes"],
+                "unresolved_calls": r["unresolved_calls"],
+                "timestamp": r["created_at"],
+            }
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def delete_repository(repo_id: str) -> bool:
+    conn = get_db_connection()
+    try:
+        with conn:
+            conn.execute("DELETE FROM repositories WHERE id = ?", (repo_id,))
+            conn.execute("DELETE FROM graph_cache WHERE repo_id = ?", (repo_id,))
+            conn.execute("DELETE FROM symbols WHERE repo_id = ?", (repo_id,))
+            conn.execute("DELETE FROM qa_threads WHERE repo_id = ?", (repo_id,))
+        return True
+    except Exception as e:
+        print(f"Error deleting repository {repo_id}: {e}")
+        return False
     finally:
         conn.close()
 
