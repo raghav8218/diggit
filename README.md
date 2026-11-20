@@ -16,15 +16,6 @@
 
 ---
 
-## 👥 Team Members & Contributions
-
-| Member | Role | Key Contributions |
-| :--- | :--- | :--- |
-| **Raghav Sharma** | Lead Architect & Full-Stack Engineer | End-to-end system design; zero-disk in-memory streaming tarball pipeline; AST parsing (`tree-sitter`, Python `ast`); PyCG call graph resolution; NetworkX graph engine & PageRank keystones; SQLite WAL persistence schema; FastAPI backend; React/Vite frontend UI & SVG convex hull clustering; Vercel & Render cloud deployments. |
-| **Shivang Kumar** | Research & Documentation | Domain research on software visual architecture; comparative analysis of CodeScene and Code2flow; test repository benchmarking and evaluation; documentation and presentation materials. |
-
----
-
 ## 📖 Table of Contents
 1. [Introduction & Problem Statement](#-introduction--problem-statement)
 2. [Key Objectives](#-key-objectives)
